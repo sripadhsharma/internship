@@ -1,6 +1,5 @@
 import pandas as pd
 from sqlalchemy import create_engine
-# Table name (assuming 'info' exists in Oracle)
 # Create Oracle engine
 oracle_connection_string = create_engine('oracle://system:Tippa123@localhost:1521/xe')
 # Create PostgreSQL engine
