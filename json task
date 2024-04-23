@@ -1,0 +1,22 @@
+import json
+import pandas as pd
+from sqlalchemy import create_engine
+import os
+postgres_connection_string = 'postgresql://postgres:Tippa123@localhost:5432/Employee'
+def main():
+    # Load JSON configuration
+    with open('newtask.json', 'r') as file:
+        config_data = json.load(file)
+    # Iterate over each configuration entry and load data into PostgreSQL
+    for entry in config_data:
+        table_name = entry['table_name']
+        schema = entry['schema']
+        file_path = entry['file_path']
+        load_data_to_postgres(table_name, schema, file_path)
+def load_data_to_postgres(table_name, schema, file_path):
+    df = pd.read_excel(file_path)
+    engine = create_engine(postgres_connection_string)
+    df.to_sql(table_name, schema=schema, con=engine, if_exists='append', index=False)
+    print(f"Data loaded into {schema}.{table_name} in PostgreSQL.")
+if __name__ == "__main__":
+    main()
