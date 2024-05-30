@@ -1,0 +1,223 @@
+import pandas as pd
+import requests
+from sqlalchemy import create_engine
+from datetime import datetime, timedelta
+import json
+
+# Function to fetch historical daily weather data from Open-Meteo.com
+def fetch_historical_weather_data(latitude, longitude, days=5):
+    # Calculate start and end dates for historical data
+    end_date = datetime.now().date() - timedelta(days=days-4)
+    start_date = end_date - timedelta(days=days-1)
+
+    # Load the last fetched date from the database
+#     2024-05-05 00:00:00
+    last_fetched_date = load_last_fetched_date_from_database()
+
+    if last_fetched_date:
+        # If last fetched date exists, set it as the start date for incremental loading
+        start_date = last_fetched_date + timedelta(days=1)
+
+    # API parameters
+    url = "https://archive-api.open-meteo.com/v1/archive"
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "start_date": start_date,
+        "end_date": end_date,
+        "daily": ["weather_code", "temperature_2m_max", "temperature_2m_min", 
+                  "temperature_2m_mean", "apparent_temperature_mean", "sunrise", 
+                  "sunset", "daylight_duration", "precipitation_sum", "rain_sum", 
+                  "snowfall_sum", "precipitation_hours", "wind_speed_10m_max", 
+                  "wind_gusts_10m_max", "et0_fao_evapotranspiration"],
+        "timezone": "auto"
+    }
+
+    # Make API request
+    response = requests.get(url, params=params)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Parse JSON response
+        data = response.json()
+
+        # Extract only the daily parameters
+        daily_data = data['daily']
+
+        # Convert daily data into DataFrame
+        df = pd.DataFrame(daily_data)
+
+        # Convert 'time' column to datetime format
+        df['time'] = pd.to_datetime(df['time'])
+
+        print("Weather data fetched successfully.")
+        return df
+    else:
+        print("Failed to fetch weather data. Status code:", response.status_code)
+        return None
+
+
+
+    
+# Function to load DataFrame into PostgreSQL, avoiding duplicates
+def load_data_into_postgresql(df):
+    if df is not None:
+        # Connect to PostgreSQL database
+        engine = create_engine('postgresql://postgres:Postgres@localhost/postgres')
+
+        # Load DataFrame into PostgreSQL only if it contains new data
+        with engine.connect() as connection:
+            # Query to check if data already exists in the database
+            query = f"SELECT MAX(\"time\") FROM public.\"History_data\""
+            max_last_updated_pg = pd.read_sql(query, connection)
+
+            # Extract the maximum timestamp value from the DataFrame
+            max_last_updated_pg_value = max_last_updated_pg.iloc[0, 0]
+
+            # Filter the DataFrame to include only new records
+            if max_last_updated_pg_value is not None:
+                df = df[df['time'] > max_last_updated_pg_value]
+
+            # Load the filtered DataFrame into PostgreSQL
+            if not df.empty:
+                df.to_sql('History_data', connection, if_exists='append', index=False)
+                print("New data loaded into PostgreSQL database")
+            else:
+                print("No new data to load into PostgreSQL")
+    else:
+        print("No data to load into PostgreSQL")
+
+# Function to load the last fetched date from the database
+def load_last_fetched_date_from_database():
+    engine = create_engine('postgresql://postgres:Postgres@localhost/postgres')
+    max_last_updated_query_pg = 'SELECT MAX("time") FROM public."History_data"'
+    max_last_updated_pg = pd.read_sql(max_last_updated_query_pg, engine)
+    max_last_updated_pg_value = max_last_updated_pg.iloc[0, 0]  # Extracting the timestamp value
+    print("Max Postgres database last date value =", max_last_updated_pg_value)
+    return None  # Placeholder for demonstration
+
+# Example usage
+latitude = 17.384
+longitude = 78.4564
+
+# Fetch historical weather data and store it into a DataFrame
+weather_df = fetch_historical_weather_data(latitude, longitude)
+
+# Load DataFrame into PostgreSQL
+load_data_into_postgresql(weather_df)
+
+
+Max Postgres database last date value = 2024-05-04 00:00:00
+Weather data fetched successfully.
+New data loaded into PostgreSQL database
+
+
+
+import pandas as pd
+import requests
+from sqlalchemy import create_engine
+from datetime import datetime, timedelta
+import json
+
+# Function to fetch historical daily weather data from Open-Meteo.com
+def fetch_historical_weather_data(latitude, longitude, days=5):
+    # Calculate start and end dates for historical data
+    end_date = datetime.now().date()  - timedelta(days=days-3)
+    start_date = end_date - timedelta(days=days-1)
+
+#     # Load the last fetched date from the database
+#     last_fetched_date = load_last_fetched_date_from_database()
+
+#     if last_fetched_date:
+#         # If last fetched date exists, set it as the start date for incremental loading
+#         start_date = last_fetched_date + timedelta(days=1)
+
+    # API parameters
+    url = "https://archive-api.open-meteo.com/v1/archive"
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "start_date": start_date,
+        "end_date": end_date,
+        "daily": ["weather_code", "temperature_2m_max", "temperature_2m_min", 
+                  "temperature_2m_mean", "apparent_temperature_mean", "sunrise", 
+                  "sunset", "daylight_duration", "precipitation_sum", "rain_sum", 
+                  "snowfall_sum", "precipitation_hours", "wind_speed_10m_max", 
+                  "wind_gusts_10m_max", "et0_fao_evapotranspiration"],
+        "timezone": "auto"
+    }
+
+    # Make API request
+    response = requests.get(url, params=params)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Parse JSON response
+        data = response.json()
+
+        # Extract only the daily parameters
+        daily_data = data['daily']
+
+        # Convert daily data into DataFrame
+        df = pd.DataFrame(daily_data)
+        print(df)
+
+        # Convert 'time' column to datetime format
+        df['time'] = pd.to_datetime(df['time'])
+
+        print("Weather data fetched successfully.")
+        return df
+    else:
+        print("Failed to fetch weather data. Status code:", response.status_code)
+        return None
+
+engine = create_engine('postgresql://postgres:Postgres@localhost/postgres')
+weather_df.to_sql('History_data', engine, if_exists='append', index=False)
+max_last_updated_query_pg = 'SELECT MAX("time") FROM public."History_data"'
+max_last_updated_pg = pd.read_sql(max_last_updated_query_pg, engine)
+max_last_updated_pg_value = max_last_updated_pg.iloc[0, 0]  # Extracting the timestamp value
+print("Max Postgres database last date value =", max_last_updated_pg_value)
+# Example usage
+latitude = 17.384
+longitude = 78.4564
+
+# Fetch historical weather data and store it into a DataFrame
+weather_df = fetch_historical_weather_data(latitude, longitude)
+
+
+Max Postgres database last date value = 2024-05-04 00:00:00
+         time  weather_code  temperature_2m_max  temperature_2m_min  \
+0  2024-04-30             1                40.1                26.0   
+1  2024-05-01             1                40.7                28.1   
+2  2024-05-02             0                39.7                25.4   
+3  2024-05-03             0                40.6                24.2   
+4  2024-05-04             0                41.6                25.0   
+
+   temperature_2m_mean  apparent_temperature_mean           sunrise  \
+0                 33.4                       34.7  2024-04-30T05:50   
+1                 33.8                       33.6  2024-05-01T05:50   
+2                 32.6                       31.8  2024-05-02T05:49   
+3                 32.7                       31.8  2024-05-03T05:49   
+4                 33.3                       34.9  2024-05-04T05:48   
+
+             sunset  daylight_duration  precipitation_sum  rain_sum  \
+0  2024-04-30T18:36           45937.08                0.0       0.0   
+1  2024-05-01T18:36           45987.17                0.0       0.0   
+2  2024-05-02T18:36           46036.76                0.0       0.0   
+3  2024-05-03T18:37           46085.80                0.0       0.0   
+4  2024-05-04T18:37           46134.26                0.0       0.0   
+
+   snowfall_sum  precipitation_hours  wind_speed_10m_max  wind_gusts_10m_max  \
+0           0.0                  0.0                13.4                28.4   
+1           0.0                  0.0                16.1                31.7   
+2           0.0                  0.0                17.0                35.3   
+3           0.0                  0.0                13.4                27.0   
+4           0.0                  0.0                14.7                27.7   
+
+   et0_fao_evapotranspiration  
+0                        6.75  
+1                        8.26  
+2                        7.98  
+3                        7.81  
+4                        7.24  
+Weather data fetched successfully.
